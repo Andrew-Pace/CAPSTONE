@@ -12,6 +12,8 @@
 #define BUTTON1 1
 #define BUTTON2 2
 #define SWITCH 3
+#define PASS 7
+#define ARM 6
 
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
@@ -35,6 +37,9 @@ bool button2_pressed = false;
 bool servo_sent = false;
 bool motor_sent = false;
 
+bool passthrough_active;
+bool arm_active;
+
 int num_of_menu_items = 1; // 1 means 2
 
 Servo pitch_servo;
@@ -52,8 +57,9 @@ void UpdateDisplay(){
     display.setCursor(0, 20); display.print("SerSens: "); display.print(servo_sensitivity); if(switchbutton_counter == 0){display.print("   <--");}
     display.setCursor(0, 30); display.print("MotSens: "); display.print(motor_sensitivity); if(switchbutton_counter == 1){display.print("   <--");}
   } else {
-    if (manual_control_mode_active){display.setCursor(0, 0); display.print("MANUAL CONTROL ACTIVE");
-      display.setCursor(0, 9); display.print("USE CAUTION");}
+    if (manual_control_mode_active){display.setCursor(0, 0); display.print("MANUAL CONTROL ACTIVE");}
+    display.setCursor(0, 9); display.print("Pass:"); if (passthrough_active){display.print("TRUE");} else{display.print("FALSE");}
+    display.setCursor(80, 9); if (arm_active){display.print("ARMED");} else {display.print("DISARMED");}
     display.setCursor(0, 20); display.print("Servo: "); display.print(servo_usec); if (pitch_selected) { display.print("   <--"); }
     display.setCursor(0, 30); display.print("Servo Reading: "); display.print(pitch_servo.readMicroseconds());
     display.setCursor(0, 40); display.print("Motor: "); display.print(motor_usec); if (pitch_selected == false) { display.print("   <--"); }
@@ -64,6 +70,21 @@ void UpdateDisplay(){
 
 void CheckButtons(){
   // CHECKBUTTONS
+  if (digitalRead(PASS)==LOW){
+    if (passthrough_active == false){passthrough_active = true;UpdateDisplay();}
+    
+  }
+  if (digitalRead(PASS)== HIGH){
+    if (passthrough_active == true){passthrough_active = false;UpdateDisplay();}
+  
+  }
+  if (digitalRead(ARM)==LOW){
+    if (arm_active == false){arm_active = true;UpdateDisplay();}
+  }
+  else {
+    if (arm_active == true){arm_active = false;UpdateDisplay();}
+  }
+
   // CHECK BUTTON1
   if (digitalRead(BUTTON1) == LOW && button1_pressed == false){ //First Detection of Button1
     button1_pressed = true;
@@ -138,6 +159,7 @@ void setup() {
   pinMode(DT, INPUT);
   pinMode(SW, INPUT_PULLUP); // Use internal pull-up resistor for the switch
   pinMode(BUTTON1, INPUT_PULLUP);pinMode(BUTTON2, INPUT_PULLUP);pinMode(SWITCH, INPUT_PULLUP);
+  pinMode(PASS, INPUT_PULLUP);pinMode(ARM, INPUT_PULLUP);
 
   Serial.begin(115200); // Start serial communication at 115200 baud
   pitch_servo.attach(SERVO, 500, 2500);
@@ -152,6 +174,7 @@ void setup() {
   display.clearDisplay();
   display.setTextSize(1); // Normal 1:1 pixel scale
   display.setTextColor(SSD1306_WHITE); // Draw white text
+  CheckButtons();
   UpdateDisplay();
   lastStateCLK = digitalRead(CLK); // Read the initial state of CLK
 }

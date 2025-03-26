@@ -174,8 +174,17 @@ class Ui_MainWindow(object):
         self.fileLabel.setText("")
         self.fileLabel.setObjectName("fileLabel")
 
+        self.commandProgress = QtWidgets.QProgressBar(MainWindow)
+        self.commandProgress.setGeometry(30, 630, 751, 25)
+        self.commandProgress.setMinimum(0)
+        self.commandProgress.setMaximum(100)
+        # self.commandProgress.setProperty("%", 0)
+        self.commandProgress.setObjectName("commandProgress")
+
+
+
         self.armButton = QtWidgets.QPushButton(MainWindow)
-        self.armButton.setGeometry(QtCore.QRect(20, 650, 565, 100))
+        self.armButton.setGeometry(QtCore.QRect(20, 670, 565, 100))
         font = QtGui.QFont()
         font.setPointSize(32)
         font.setBold(True)
@@ -184,7 +193,7 @@ class Ui_MainWindow(object):
         self.armButton.setObjectName("armButton")
 
         self.liveButton = QtWidgets.QPushButton(MainWindow)
-        self.liveButton.setGeometry(QtCore.QRect(590, 650, 171, 100))
+        self.liveButton.setGeometry(QtCore.QRect(590, 670, 171, 100))
         font = QtGui.QFont()
         font.setPointSize(15)
         font.setBold(True)
@@ -249,6 +258,8 @@ class Ui_MainWindow(object):
         self.motorCounter.setObjectName(_translate("MainWindow", "motorCounter"))
         self.looseButton.setText(_translate("MainWindow", ""))
         self.clockLabel.setText(_translate("MainWindow", "Clock Loading..."))
+        self.commandProgress.setFormat(_translate("MainWindow", "%p% Complete"))
+
         self.readout.setStyleSheet("""
                 QTextEdit {
                     background: transparent;

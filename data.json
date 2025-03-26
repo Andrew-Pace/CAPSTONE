@@ -1,0 +1,20 @@
+[
+    {
+        "servoUsec": 1500,
+        "motorUsec": 1200,
+        "for_millisecs": 500,
+        "is_armed": true
+    },
+    {
+        "servoUsec": 1600,
+        "motorUsec": 1300,
+        "for_millisecs": 600,
+        "is_armed": false
+    },
+    {
+        "servoUsec": 1700,
+        "motorUsec": 1400,
+        "for_millisecs": 700,
+        "is_armed": true
+    }
+]

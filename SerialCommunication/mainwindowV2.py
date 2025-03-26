@@ -141,10 +141,10 @@ class Ui_MainWindow(object):
         self.clockLabel.setAlignment(QtCore.Qt.AlignCenter)
 
         self.readout = QtWidgets.QTextEdit(self.sliderBox)
-        self.readout.setGeometry(QtCore.QRect(220, 80, 300, 400))
+        self.readout.setGeometry(QtCore.QRect(228, 80, 286, 400))
         self.readout.setObjectName("readout")
         self.readout.setReadOnly(True)
-        self.readout.document().setDocumentMargin(10)
+        # self.readout.document().setDocumentMargin(10)
 
 
         self.looseButton = QtWidgets.QPushButton(self.sliderBox)
@@ -174,12 +174,41 @@ class Ui_MainWindow(object):
         self.fileLabel.setText("")
         self.fileLabel.setObjectName("fileLabel")
 
+        self.nextcommandProgress = QtWidgets.QProgressBar(MainWindow)
+        self.nextcommandProgress.setGeometry(30, 625, 722, 15)
+        self.nextcommandProgress.setMinimum(0)
+        self.nextcommandProgress.setMaximum(100)
+        self.nextcommandProgress.setObjectName("nextcommandProgress")
+
+        self.nextcommandProgress.setStyleSheet("""
+                    QProgressBar {
+                        border: 2px solid grey;
+                        border-radius: 5px;
+                        text-align: center;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #00FF00;  # Change this to your desired color
+                        width: 20px;
+                    }
+                """)
+
         self.commandProgress = QtWidgets.QProgressBar(MainWindow)
-        self.commandProgress.setGeometry(30, 630, 751, 25)
+        self.commandProgress.setGeometry(30, 640, 722, 25)
         self.commandProgress.setMinimum(0)
         self.commandProgress.setMaximum(100)
-        # self.commandProgress.setProperty("%", 0)
         self.commandProgress.setObjectName("commandProgress")
+
+        self.commandProgress.setStyleSheet("""
+                            QProgressBar {
+                                border: 2px solid grey;
+                                border-radius: 5px;
+                                text-align: center;
+                            }
+                            QProgressBar::chunk {
+                                background-color: #00FF00;  # Change this to your desired color
+                                width: 20px;
+                            }
+                        """)
 
 
 
@@ -259,22 +288,23 @@ class Ui_MainWindow(object):
         self.looseButton.setText(_translate("MainWindow", ""))
         self.clockLabel.setText(_translate("MainWindow", "Clock Loading..."))
         self.commandProgress.setFormat(_translate("MainWindow", "%p% Complete"))
+        self.nextcommandProgress.setFormat(_translate("MainWindow", "%p% Complete"))
 
-        self.readout.setStyleSheet("""
-                QTextEdit {
-                    background: transparent;
-                    color: black;
-                    border: none;
-                    font-family: Courier;
-                    font-size: 5px;  /* Very small font size */
-                    font-weight: bold;
-                }
-            """)
+        # self.readout.setStyleSheet("""
+        #         QTextEdit {
+        #             background: transparent;
+        #             color: black;
+        #             border: none;
+        #             font-family: Courier;
+        #             font-size: 5px;  /* Very small font size */
+        #             font-weight: bold;
+        #         }
+        #     """)
 
         self.readout.setHtml(_translate("MainWindow", """
                 <html>
                     <head/>
-                    <body style="line-height: 1.2; margin: 0; padding: 0;">
+                    <body style="line-height: 1.2; margin: 0; padding: 0; background-color: #d0d0d0; border: 2px solid black;">
                         <p>System Readout...</p>
                     </body>
                 </html>

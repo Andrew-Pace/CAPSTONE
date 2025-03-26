@@ -8,11 +8,12 @@ import os
 from mainwindowV2 import Ui_MainWindow  # Import the generated UI file
 import json
 import time
+from datetime import datetime
 
 servo_min, servo_max = 500, 2500
 motor_min, motor_max = 1000, 2000
 servo_neutral = (servo_min + servo_max) / 2
-motor_neutral = (motor_min + motor_max) / 2
+motor_neutral = motor_min
 
 # Initialize the serial connection (adjust the port and baud rate as needed)
 ser = serial.Serial('COM6', 115200)  # Replace 'COM3' with your serial port
@@ -21,10 +22,9 @@ ser = serial.Serial('COM6', 115200)  # Replace 'COM3' with your serial port
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
-
         self.is_armed = False
-        self.servoUsec = None
-        self.motorUsec = None
+        self.servoUsec = servo_neutral
+        self.motorUsec = motor_neutral
         self.is_live_controlled = False
         self.opened_file = None
         self.is_file_loaded = False
@@ -39,8 +39,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.motorMin.editingFinished.connect(self.update_motor_slider)
         self.servoMax.editingFinished.connect(self.update_servo_slider)
         self.servoMin.editingFinished.connect(self.update_servo_slider)
-        self.motorSlider.valueChanged.connect(self.update_motor_counter)
-        self.pitchSlider.valueChanged.connect(self.update_servo_counter)
+        self.motorSlider.valueChanged.connect(self.update_counters)
+        self.pitchSlider.valueChanged.connect(self.update_counters)
         self.openFile.clicked.connect(self.open_file_dialog)
         self.looseButton.clicked.connect(self.loose)
 
@@ -61,27 +61,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.command_sequence_start_time = 0
 
         self.UpdateTimer = QtCore.QTimer()
-        self.UpdateTimer.timeout.connect(self.update)
+        self.UpdateTimer.timeout.connect(self.updateFrame)
         self.UpdateTimer.start(20)
 
         self.progressTimer = QtCore.QTimer(self)
         self.progressTimer.timeout.connect(self.updateProgressBar)
         self.progressTimer.start(100)  # Update every 100 milliseconds
 
+        self.nextcommandprogress_value = 0
         self.progress_value = 0
+        self.update_counters()
 
-    def update(self):
+    def updateFrame(self):
         # Update the clock label
-        self.clockLabel.setText("Time: " + str(time.strftime("%H:%M:%S", time.localtime())))
+        self.clockLabel.setText("Time: " + datetime.now().strftime("%H:%M:%S.%f")[:-3])
 
         # Update arm button state
+        if self.is_live_controlled:
+            self.servoUsec = int(self.pitchSlider.value())
+            self.motorUsec = int(self.motorSlider.value())
+        # if not self.is_live_controlled and not self.is_file_loaded:
+        #     self.servoUsec = servo_neutral
+        #     self.motorUsec = motor_neutral
         if self.is_armed:
             self.armButton.setStyleSheet("background-color: red; color: white;")
             self.armButton.setText("Click To Disarm")
-            if self.is_live_controlled:
-                self.servoUsec = int(self.pitchSlider.value())
-                self.motorUsec = int(self.motorSlider.value())
-                self.printToConsole(f"{self.servoUsec}, {self.motorUsec}")
         else:
             self.armButton.setStyleSheet("background-color: white; color: black;")
             self.armButton.setText("Click To Arm")
@@ -102,6 +106,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         if self.is_file_loaded:
             if self.total_command_sequence_time > 0 and self.command_sequence_start_time > 0:
                 self.progress_value = int(100*(time.time() - self.command_sequence_start_time) / self.total_command_sequence_time)
+
+                self.nextcommandprogress_value =  int(100* (time.time() - self.last_command_time) / (self.next_command_time - self.last_command_time))
             else:
                 self.progress_value = 0
             if not self.is_armed:
@@ -119,11 +125,13 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         # Update the last time
         self.last_time = time.time()
 
+    def updateSliderPositions(self):
+        self.pitchSlider.setValue(self.servoUsec)
+        self.motorSlider.setValue(self.motorUsec)
+
     def updateProgressBar(self):
-        print("hello1")
-        print("hello2")
         self.commandProgress.setValue(self.progress_value)
-        print("hello3")
+        self.nextcommandProgress.setValue(self.nextcommandprogress_value)
 
     def update_motor_slider(self):
         try:
@@ -143,11 +151,10 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         except ValueError:
             pass  # Handle the error as needed
 
-    def update_motor_counter(self):
-        self.motorCounter.display(self.motorSlider.value())
+    def update_counters(self):
+        self.motorCounter.display(self.motorUsec)
+        self.pitchCounter.display(self.servoUsec)
 
-    def update_servo_counter(self):
-        self.pitchCounter.display(self.pitchSlider.value())
 
     def arm_button_clicked(self):
         self.is_armed = not self.is_armed
@@ -260,14 +267,28 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                         results, for_millis = self.commands[self.command_index]
                         current_time = time.time()  # Current time in seconds
                         if current_time >= self.next_command_time:
-                            self.printToConsole(f"Command {self.command_index + 1} Issuing")
-                            input_str = f"{results[0]},{results[1]},{results[2]}\n"
-                            self.printToConsole(input_str)
-                            # self.printToConsole(str(current_time))
+                            self.printToConsole(f"Issuing Command {self.command_index + 1}...")
+
+                            input_str = f"{results[1]},{results[0]},{results[2]}\n"
+
+                            self.printToConsole(f'Servo command: <span style="color: #0000FF;">{results[1]}</span>')
+                            self.printToConsole(f'Motor command: <span style="color: #0000FF;">{results[0]}</span>')
+
+                            # Uncomment if you want to print the current time
+                            # self.printToConsole(f"Current Time: {current_time:.2f} seconds")
+                            self.servoUsec, self.motorUsec = results[1], results[0]
+                            self.update_counters()
+                            self.updateSliderPositions()
                             ser.write(input_str.encode())
+                            self.printToConsole(f'Command {self.command_index + 1} Time Stamp: <span style="color:'
+                                                f' red;">{datetime.now().strftime("%H:%M:%S.%f")[:-3]}</span>.')
+
                             self.last_command_time = current_time  # Update the last command time
                             self.next_command_time = current_time + (for_millis / 1000)
+
+                            self.printToConsole(f"Next Command in {self.next_command_time - current_time:.2f} seconds")
                             self.command_index += 1  # Move to the next command
+
                     else:
                         self.printToConsole(f"Command Sequence Completed")
                         self.loose_active = False

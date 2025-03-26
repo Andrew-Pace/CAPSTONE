@@ -12,9 +12,9 @@ import time
 servo_min, servo_max = 500, 2500
 motor_min, motor_max = 1000, 2000
 
-
 # Initialize the serial connection (adjust the port and baud rate as needed)
 ser = serial.Serial('COM6', 115200)  # Replace 'COM3' with your serial port
+
 
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
@@ -25,6 +25,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.motorUsec = None
         self.is_live_controlled = False
         self.opened_file = None
+        self.is_file_loaded = False
+        self.loose_active = False
 
         self.setupUi(self)
         # self.armButton.setCheckable(True)  # Make the button checkable to toggle its state
@@ -37,7 +39,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.motorSlider.valueChanged.connect(self.update_motor_counter)
         self.pitchSlider.valueChanged.connect(self.update_servo_counter)
         self.openFile.clicked.connect(self.open_file_dialog)
-        self.looseButton.clicked.connect(self.Loose)
+        self.looseButton.clicked.connect(self.loose)
 
         self.motorMax.setText(str(motor_max))
         self.motorMin.setText(str(motor_min))
@@ -45,16 +47,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.servoMin.setText(str(servo_min))
         self.update_motor_slider()
         self.update_servo_slider()
-        self.pitchSlider.setValue(int((servo_max+servo_min)/2))
+        self.pitchSlider.setValue(int((servo_max + servo_min) / 2))
 
+        self.commands = []
+        self.command_index = 0
         # Create a timer
-        self.timer = QTimer()
-        self.timer.timeout.connect(self.update)
+        self.bTimer = QTimer()
+        self.bTimer.timeout.connect(self.update)
         self.broadcast(100)
+        self.last_time = time.time()
+        self.last_command_time = 0
+
+        self.commandTimer = QTimer()
+
 
     def update(self):
-
+        deltaT = time.time() - self.last_time
+        self.clockLabel.setText("Time: " + str(time.strftime("%H:%M:%S", time.localtime())))
         if self.is_armed:
+            self.send_commands()
             self.armButton.setStyleSheet("background-color: red; color: white;")
             self.armButton.setText("Click To Disarm")
             if self.is_live_controlled:
@@ -65,6 +76,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         else:
             self.armButton.setStyleSheet("background-color: white; color: black;")
             self.armButton.setText("Click To Arm")
+
+
         if self.is_live_controlled:
             self.liveButton.setStyleSheet("background-color: yellow; color: black;")
             self.liveButton.setText("LIVE CONTROL")
@@ -72,10 +85,27 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             self.liveButton.setStyleSheet("background-color: blue; color: white;")
             self.liveButton.setText("FILE CONTROL")
 
+        if self.loose_active:
+            self.looseButton.setStyleSheet("background-color: red; color: white")
+            self.looseButton.setText("Click To Deactivate")
+        if self.is_file_loaded:
+            if not self.is_armed:
+                self.looseButton.setStyleSheet("background-color: #e4ea67; color: black; font-weight: bold; font-size:12px")
+                self.looseButton.setText("Need to Arm before sending commands")
+            if self.is_armed:
+                self.looseButton.setStyleSheet("background-color: green; color: white; font-weight: bold; font-size:16px")
+                self.looseButton.setText("Click To Send Commands")
 
+        self.last_time = time.time()
 
     def broadcast(self, millis):
-        self.timer.start(millis) # Perform action every __ milliseconds
+        self.bTimer.start(millis)  # Perform action every __ milliseconds
+
+    def command_timer_start(self, millis):
+        self.commandTimer.start(millis)
+
+    def command_timer_end(self, millis):
+        self.commandTimer.stop()
 
     def update_motor_slider(self):
         try:
@@ -110,27 +140,34 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def open_file_dialog(self):
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.ReadOnly
-        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "", "All Files (*);;Text Files (*.txt)", options=options)
+        fileName, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "", "All Files (*);;Text Files (*.txt)",
+                                                            options=options)
         if fileName:
             self.openFile.setText(fileName)
             self.opened_file = fileName
             print(f"Selected file: {fileName}")
             self.print_command_breakdown(self.load_commands(fileName))
+            self.is_file_loaded = True
 
     def printToConsole(self, inputstring):
         self.readout.append(inputstring)
 
-    def Loose(self):
-        if self.opened_file is not None:
-            if not self.check_file(self.opened_file):
-                return False, "File does not exist or is not a JSON file."
-
-            try:
-                commands = self.load_commands(self.opened_file)
-                self.send_commands(commands)
-            except Exception as e:
-                self.printToConsole(f"Error Loading File: {str(e)}")
-                return False, f"Error Loading File: {str(e)}"
+    def loose(self):
+        self.printToConsole("Loose Clicked")
+        if self.is_armed:
+            if not self.is_live_controlled:
+                if self.opened_file is not None:
+                    self.printToConsole(f"{self.opened_file} selected")
+                    # if not self.check_file(self.opened_file):
+                    #     return False, "File does not exist or is not a JSON file."
+                    try:
+                        self.printToConsole("Loading Commands...")
+                        self.commands = self.load_commands(self.opened_file)
+                        self.printToConsole("Sending Commands...")
+                        self.send_commands()
+                    except Exception as e:
+                        self.printToConsole(f"Error Loading File: {str(e)}")
+                        return False, f"Error Loading File: {str(e)}"
         return True
 
     def print_command_breakdown(self, commands):
@@ -139,7 +176,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         for index, (results, for_millis) in enumerate(commands):
             print(f"{index + 1}. {results}")
             command_str = (f"Command {index + 1}: Motor: {results[1]}, Servo: {results[0]},"
-                           f"Arm Status: {results[2]}. (Hold for {for_millis/1000:.3f} seconds)")
+                           f"Arm Status: {results[2]}. (Hold for {for_millis / 1000:.3f} seconds)")
             print(command_str)
             self.printToConsole(command_str)
 
@@ -157,9 +194,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def load_commands(self, file_path):
         try:
-            if not os.path.isfile(file_path):
-                self.printToConsole(f"File not found: {file_path}")
-                return []
+            # if not os.path.isfile(file_path):
+            #     self.printToConsole(f"File not found: {file_path}")
+            #     return []
 
             with open(file_path, 'r') as file:
                 try:
@@ -190,16 +227,26 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
             return []
 
     def send_commands(self, commands=None):
-        if self.is_live_controlled:
-            input_str = f"{self.servoUsec},{self.motorUsec},{self.is_armed}\n"
-            # Send the input string over the serial connection
-            ser.write(input_str.encode())
-        else:
-            for results, for_millis in commands:
-                input_str = f"{results[0]},{results[1]},{results[2]}\n"
-                self.printToConsole(input_str)
+        if self.is_armed:
+            if self.is_live_controlled:
+                input_str = f"{self.servoUsec},{self.motorUsec},{self.is_armed}\n"
                 ser.write(input_str.encode())
-                time.sleep(for_millis)
+            else:
+                if self.loose_active:
+                    if self.commands and self.command_index < len(self.commands):
+                        results, for_millis = self.commands[self.command_index]
+                        current_time = time.time()  # Current time in seconds
+                        if current_time - self.last_command_time >= (for_millis / 1000):
+                            input_str = f"{results[0]},{results[1]},{results[2]}\n"
+                            self.printToConsole(input_str)
+                            self.printToConsole(str(current_time))
+                            ser.write(input_str.encode())
+                            self.last_command_time = current_time  # Update the last command time
+                            self.command_index += 1  # Move to the next command
+
+    def reset_commands(self):
+        self.command_index = 0
+        self.last_command_time = 0
 
     def readJSON(self, entry, index):
         try:
@@ -215,6 +262,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.printToConsole(f"Error processing entry at index {index}: {str(e)}")
             return None, None
+
 
 # def send_signals(servo_usec, motor_usec, arm_active):
 #     # Create the input string in the format expected by the Arduino code
